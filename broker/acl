@@ -1,0 +1,12 @@
+# Who may read/write which topics (see README "MQTT topics").
+# The web app reads everything but may write only commands, rules and routines.
+# To add a web user: run ./setup-users.sh <name> and copy the webadmin block.
+
+user board
+topic readwrite home/#
+
+user webadmin
+topic read home/#
+topic write home/+/+/set
+topic write home/system/rules
+topic write home/system/routines

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Home Brain</title>
+  <link rel="stylesheet" href="src/style.css">
+  <!-- Vendored (not from a CDN) so the page works on a LAN without internet (NFR3). -->
+  <script src="vendor/mqtt.min.js"></script>
+  <script src="src/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Smart Home Brain</h1>
+    <span id="conn" class="pill pill-off">Disconnected</span>
+  </header>
+
+  <main>
+    <section id="login" class="card">
+      <h2>Connect to the broker</h2>
+      <form id="login-form">
+        <label>Broker URL
+          <input id="url" type="text" required autocomplete="url" spellcheck="false">
+        </label>
+        <label>Username
+          <input id="username" type="text" required autocomplete="username" spellcheck="false">
+        </label>
+        <label>Password
+          <input id="password" type="password" required autocomplete="current-password">
+        </label>
+        <button type="submit">Connect</button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+    </section>
+
+    <section id="dashboard" class="card" hidden>
+      <div class="card-head">
+        <h2>Board status</h2>
+        <button id="disconnect" class="secondary" type="button">Disconnect</button>
+      </div>
+      <p id="board-state" class="board board-unknown">Waiting for status…</p>
+      <dl class="stats">
+        <div><dt>Uptime</dt><dd id="uptime">–</dd></div>
+        <div><dt>Errors</dt><dd id="errors">–</dd></div>
+        <div><dt>Firmware</dt><dd id="fw">–</dd></div>
+        <div><dt>Last update</dt><dd id="last-update">–</dd></div>
+      </dl>
+      <p id="last-error" class="error" hidden></p>
+    </section>
+  </main>
+</body>
+</html>

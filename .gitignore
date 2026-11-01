@@ -1,0 +1,14 @@
+# Credentials
+firmware/m7_brain/secrets.h
+
+# Build output and IDE compile databases
+build/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Broker: password hashes and persistence data
+broker/passwd
+broker/data/
