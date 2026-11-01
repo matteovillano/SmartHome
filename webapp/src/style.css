@@ -102,3 +102,41 @@ button.secondary { background: transparent; color: var(--muted); border: 1px sol
 .stats dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .error { color: var(--bad); margin: 8px 0 0; overflow-wrap: anywhere; }
+
+#rooms { margin-top: 16px; }
+.muted { color: var(--muted); margin: 0; }
+.small { font-size: 0.85rem; margin-top: 12px; }
+
+.room-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.room { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.room h3 { font-size: 0.95rem; margin: 0 0 8px; }
+
+.device { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.device-name { display: grid; }
+.device-state { font-size: 0.8rem; color: var(--muted); }
+
+.switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--unknown-bg);
+  border: 1px solid var(--border);
+  flex: none;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease;
+}
+.switch[aria-checked="true"] { background: var(--ok-bg); border-color: var(--ok); }
+.switch[aria-checked="true"]::after { transform: translateX(20px); background: var(--ok); }
+.switch.pending { opacity: 0.6; }
+.switch:disabled { cursor: not-allowed; opacity: 0.45; }

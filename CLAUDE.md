@@ -52,8 +52,8 @@ webapp/dev/fake_board.sh                                       # fake home/syste
 
 Strict split. The **M4 decides nothing**: it drives peripherals (PIR, light sensors, buttons, LEDs, servos, relay, OLED), sends `Event`s to the M7 only on change or threshold crossing, executes `Command`s, clamps values to hardware limits and runs the watchdog. The **M7 holds all logic and all external communication**, because only it has WiFi and `Serial`. Its modules:
 
-- **Event bus**: all modules talk only through it. Events come from the M4, the scheduler (`TIME_TICK`) and MQTT (`REMOTE_COMMAND`).
-- **State manager**: single source of truth for device and sensor state.
+- **Event bus** (`core/event_bus`): all modules talk only through it, using the M7-only `BusMessage` (`SENSOR_EVENT`, `COMMAND_REQUEST` with a `CommandSource`, `STATE_CHANGED`). `bus::publish` is thread-safe; `bus::dispatch` runs in `loop()`.
+- **State manager** (`core/state_manager`): single source of truth; the only module that executes `COMMAND_REQUEST`s (sends to the M4) and emits `STATE_CHANGED`. `comms/mqtt_bridge` maps `STATE_CHANGED` → retained `…/state` and `…/set` → `COMMAND_REQUEST`. Pattern for adding a device type: M4 driver + `apply()` case, state manager case, topic kind in `mqtt_topics.cpp`.
 - **Rule engine**: evaluates trigger → conditions → actions. A routine is a rule with a time trigger.
 - **Scheduler** (NTP + RTC), **override manager** (manual commands pause automatic rules), **storage** (flash/microSD), **logger**.
 - **Comms**: WiFi + MQTT run in a dedicated thread (`netlink`) because reconnects block for seconds; other threads talk to it only through thread-safe calls. Offline buffer still to do.

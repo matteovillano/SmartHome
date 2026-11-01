@@ -27,4 +27,16 @@ void reportError(const char* message);
 // True while connected to the broker.
 bool isOnline();
 
+// Thread-safe, non-blocking: queues a message for the network thread.
+// Returns false (message dropped) while offline or when the queue is full.
+bool publish(const char* topic, const char* payload, bool retain);
+
+// Called in the NETWORK THREAD for each message on home/+/+/set. The handler must
+// only hand data over to thread-safe code (e.g. bus::publish). Set before begin().
+using SetHandler = void (*)(const char* topic, const char* payload);
+void setSetHandler(SetHandler handler);
+
+// True once after every successful (re)connect; then false until the next one.
+bool takeResyncRequest();
+
 }  // namespace netlink

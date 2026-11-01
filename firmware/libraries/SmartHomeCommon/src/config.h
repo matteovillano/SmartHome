@@ -19,9 +19,12 @@ constexpr uint8_t BUTTON_PINS[BUTTON_COUNT] = {D10, D11, D12, D13};
 constexpr uint8_t BUTTON_ROOMS[BUTTON_COUNT] = {1, 2, 3, 0};  // 0 = whole house
 
 // Actuators, index = device id - 1.
-constexpr uint8_t LIGHT_COUNT = 6;
-constexpr uint8_t LIGHT_PINS[LIGHT_COUNT] = {D3, D4, D5, D6, D14, A0};
-constexpr uint8_t LIGHT_ROOMS[LIGHT_COUNT] = {1, 1, 2, 2, 3, 3};
+// Target: 6 lights, 2 per room. Until they are wired, the only light is the
+// onboard green LED (active LOW), used as light 1 in room 1.
+constexpr uint8_t LIGHT_COUNT = 1;
+constexpr uint8_t LIGHT_PINS[LIGHT_COUNT] = {LEDG};
+constexpr bool LIGHT_ACTIVE_LOW[LIGHT_COUNT] = {true};
+constexpr uint8_t LIGHT_ROOMS[LIGHT_COUNT] = {1};
 
 constexpr uint8_t SHUTTER_COUNT = 3;
 constexpr uint8_t SHUTTER_PINS[SHUTTER_COUNT] = {D0, D1, D2};
@@ -43,9 +46,12 @@ constexpr uint32_t PIR_CLEAR_AFTER_MS = 30000;
 // M7 logic.
 constexpr uint32_t OVERRIDE_DEFAULT_MS = 15UL * 60UL * 1000UL;
 
-// Queue sizes between the RPC thread and loop() (static allocation).
+// Queue sizes (static allocation).
 constexpr uint8_t EVENT_QUEUE_SIZE = 32;    // on the M7
 constexpr uint8_t COMMAND_QUEUE_SIZE = 16;  // on the M4
+constexpr uint8_t BUS_QUEUE_SIZE = 32;      // M7 event bus
+constexpr uint8_t BUS_MAX_SUBSCRIBERS = 8;
+constexpr uint8_t MQTT_OUT_QUEUE_SIZE = 16; // M7 -> network thread
 
 constexpr unsigned long SERIAL_BAUD = 115200;
 

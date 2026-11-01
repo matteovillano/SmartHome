@@ -264,6 +264,15 @@ The M4 only produces `MOTION`, `LIGHT_LEVEL` and `BUTTON` events. `TIME_TICK` (s
 | `home/system/routines` | both | Add / edit / delete scheduled routines |
 | `home/system/status` | board → web app | Online, uptime, errors |
 
+Device topics use `room<R>` and `<kind><N>`, where `<kind>` is `light`, `shutter` or `relay`, `N` is the 1-based id within its type (the `device` of `Command`), and `R` must be that device's room in `config.h`. Example: `home/room1/light1/set`.
+
+- `…/set` payload: an integer `0`–`100` and nothing else. Published by the web app **not retained**, so an old command is never replayed. Invalid messages are rejected and counted in the status `errors`.
+- `…/state` payload: the current value `0`–`100`, **retained**. The board publishes it after every executed command (also when the value did not change, as a confirmation) and republishes all states after each reconnect. The web app builds its room view from these topics.
+
+### M7 internal event bus
+
+`REMOTE_COMMAND` cannot carry a full command in `Event`, so the M7 bus uses its own `BusMessage` (`core/bus_message.h`): `SENSOR_EVENT` (an `Event` from the M4), `COMMAND_REQUEST` (a `Command` plus its source: remote, button, rule, scheduler) and `STATE_CHANGED`. Only the state manager executes commands and sends them to the M4. `BusMessage` never leaves the M7, so it can change without touching the M4 ↔ M7 contract.
+
 ### Status payload (`home/system/status`)
 
 Retained, JSON. The board publishes it on connect, when `errors` changes, and as a heartbeat every 5 min. Its MQTT Last Will is `{"online":false}` (retained), so the web app sees a crash or power loss.
@@ -369,6 +378,7 @@ T1 latency (50 trials, median ≤ 200 ms) · T2 rules and override · T3 offline
 - [x] M4 ↔ M7 RPC link (`m7link` / `m4link`), tested on the board: round trip ≈ 0.4 ms (`tests/*/test_rpc_link`)
 - [x] Broker (auth + ACL) and minimal web app: login and board status, tested with a fake board
 - [x] M7 WiFi + MQTT in its own thread (`netlink`): real `home/system/status` with Last Will, tested on the board
+- [x] First end-to-end slice: light 1 (onboard green LED) controlled from the web app via MQTT → M7 event bus → state manager → M4, with retained state confirmation
 - [ ] Pin assignments in `config.h` (placeholders until the wiring is fixed)
 - [ ] Phase 1 – Modules developed in parallel with stubs
 - [ ] Phase 2 – Integration (MVP: all Must requirements)

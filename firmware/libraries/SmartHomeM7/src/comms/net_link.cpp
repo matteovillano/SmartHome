@@ -7,8 +7,15 @@
 #include <mbed.h>
 
 #include "mqtt_topics.h"
+#include "platform/CircularBuffer.h"
 
 namespace {
+
+struct OutMessage {
+  char topic[TOPIC_MAX_LEN];
+  char payload[PAYLOAD_MAX_LEN];
+  bool retain;
+};
 
 constexpr size_t LAST_ERROR_LEN = 48;
 constexpr size_t STATUS_JSON_LEN = 192;
@@ -27,6 +34,12 @@ uint32_t errorCount = 0;
 char lastError[LAST_ERROR_LEN] = "";
 volatile bool statusDirty = false;
 volatile bool online = false;
+volatile bool resyncRequested = false;
+
+// Producers: any thread. Consumer: the network thread.
+mbed::CircularBuffer<OutMessage, MQTT_OUT_QUEUE_SIZE> outQueue;
+volatile uint32_t droppedOut = 0;
+netlink::SetHandler setHandler = nullptr;
 
 void log(const char* message) {
   Serial.print("[net] ");
@@ -66,6 +79,37 @@ bool publishStatus() {
   if (!mqtt.endMessage()) return false;
   statusDirty = false;
   return true;
+}
+
+// Called by mqtt.poll() (network thread) for every incoming message.
+void onMqttMessage(int size) {
+  char topic[TOPIC_MAX_LEN];
+  char payload[PAYLOAD_MAX_LEN];
+  String t = mqtt.messageTopic();
+  strncpy(topic, t.c_str(), sizeof topic - 1);
+  topic[sizeof topic - 1] = '\0';
+
+  size_t n = 0;
+  while (mqtt.available()) {
+    int c = mqtt.read();
+    if (n < sizeof payload - 1) payload[n++] = static_cast<char>(c);
+  }
+  payload[n] = '\0';
+
+  if (size >= static_cast<int>(sizeof payload) || t.length() >= sizeof topic) {
+    netlink::reportError("MQTT message too long");
+    return;
+  }
+  if (setHandler) setHandler(topic, payload);
+}
+
+void drainOutQueue() {
+  OutMessage message;
+  while (outQueue.pop(message)) {
+    if (!mqtt.beginMessage(message.topic, message.retain, /*qos=*/1)) return;
+    mqtt.print(message.payload);
+    if (!mqtt.endMessage()) return;
+  }
 }
 
 bool ensureWifi() {
@@ -114,9 +158,14 @@ bool ensureMqtt() {
     Serial.println(mqtt.connectError());
     return false;
   }
+  mqtt.onMessage(onMqttMessage);
+  if (!mqtt.subscribe(TOPIC_SET_FILTER, /*qos=*/1)) {
+    netlink::reportError("MQTT subscribe failed");
+  }
   wasConnected = true;
   online = true;
-  statusDirty = true;  // replace the retained "offline" Last Will right away
+  statusDirty = true;      // replace the retained "offline" Last Will right away
+  resyncRequested = true;  // the main loop republishes every device state
   log("MQTT connected");
   return true;
 }
@@ -129,6 +178,7 @@ void run() {
       continue;
     }
     mqtt.poll();
+    drainOutQueue();
 
     uint32_t now = millis();
     if (statusDirty || now - lastStatusMs >= STATUS_HEARTBEAT_MS) {
@@ -160,5 +210,26 @@ void reportError(const char* message) {
 }
 
 bool isOnline() { return online; }
+
+bool publish(const char* topic, const char* payload, bool retain) {
+  if (!online || outQueue.full()) {
+    droppedOut = droppedOut + 1;
+    return false;
+  }
+  OutMessage message{};
+  strncpy(message.topic, topic, sizeof message.topic - 1);
+  strncpy(message.payload, payload, sizeof message.payload - 1);
+  message.retain = retain;
+  outQueue.push(message);
+  return true;
+}
+
+void setSetHandler(SetHandler handler) { setHandler = handler; }
+
+bool takeResyncRequest() {
+  if (!resyncRequested) return false;
+  resyncRequested = false;
+  return true;
+}
 
 }  // namespace netlink

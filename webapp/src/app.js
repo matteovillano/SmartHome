@@ -4,6 +4,11 @@
 // and shows the board status (home/system/status, see README "MQTT topics").
 
 const STATUS_TOPIC = "home/system/status";
+const STATE_FILTER = "home/+/+/state";
+// home/room<R>/<kind><N>/state, see README "MQTT topics".
+const STATE_TOPIC_RE = /^home\/room(\d+)\/(light|shutter|relay)(\d+)\/state$/;
+const KIND_LABEL = { light: "Light", shutter: "Shutter", relay: "Relay" };
+const COMMAND_TIMEOUT_MS = 3000;
 const PREFS_KEY = "shb.login";  // URL and username only; the password is never stored
 
 const $ = (id) => document.getElementById(id);
@@ -12,6 +17,10 @@ let client = null;
 let lastStatus = null;      // last parsed status payload
 let lastStatusAt = 0;       // Date.now() when it arrived
 let everConnected = false; // distinguishes "wrong URL" from a later network drop
+
+// Devices are discovered from the board's retained state topics, so the page
+// needs no copy of config.h. Key: "room1/light1".
+const devices = new Map(); // key -> { room, kind, id, value, pendingSince }
 
 function loadPrefs() {
   try {
@@ -81,6 +90,88 @@ function renderStatus() {
   lastError.hidden = !lastStatus.last_error;
 }
 
+function boardOnline() {
+  return Boolean(client && lastStatus && lastStatus.online === true);
+}
+
+function renderRooms() {
+  const list = $("room-list");
+  $("rooms-empty").hidden = devices.size > 0;
+  list.replaceChildren();
+
+  const rooms = new Map();
+  for (const d of [...devices.values()].sort((a, b) => a.room - b.room || a.kind.localeCompare(b.kind) || a.id - b.id)) {
+    if (!rooms.has(d.room)) rooms.set(d.room, []);
+    rooms.get(d.room).push(d);
+  }
+
+  for (const [room, roomDevices] of rooms) {
+    const card = document.createElement("div");
+    card.className = "room";
+    const title = document.createElement("h3");
+    title.textContent = `Room ${room}`;
+    card.append(title);
+
+    for (const d of roomDevices) {
+      const row = document.createElement("div");
+      row.className = "device";
+
+      const name = document.createElement("div");
+      name.className = "device-name";
+      const label = document.createElement("span");
+      label.textContent = `${KIND_LABEL[d.kind]} ${d.id}`;
+      const state = document.createElement("span");
+      state.className = "device-state";
+      state.textContent = d.pendingSince ? "Sending…" : d.kind === "shutter" ? `${d.value}% open` : d.value > 0 ? "On" : "Off";
+      name.append(label, state);
+      row.append(name);
+
+      // Lights and relay are on/off for now; shutters get a slider later.
+      if (d.kind !== "shutter") {
+        const sw = document.createElement("button");
+        sw.type = "button";
+        sw.className = "switch" + (d.pendingSince ? " pending" : "");
+        sw.setAttribute("role", "switch");
+        sw.setAttribute("aria-checked", String(d.value > 0));
+        sw.setAttribute("aria-label", `${KIND_LABEL[d.kind]} ${d.id}, room ${room}`);
+        sw.disabled = !boardOnline();
+        sw.title = sw.disabled ? "Board offline" : "";
+        sw.addEventListener("click", () => sendSet(d, d.value > 0 ? 0 : 100));
+        row.append(sw);
+      }
+      card.append(row);
+    }
+    list.append(card);
+  }
+}
+
+function sendSet(device, value) {
+  if (!boardOnline()) return;
+  const topic = `home/room${device.room}/${device.kind}${device.id}/set`;
+  device.pendingSince = performance.now();
+  renderRooms();
+  // Not retained: a stale command must never be replayed to the board later.
+  client.publish(topic, String(value), { qos: 1, retain: false });
+}
+
+function onStateMessage(topic, payload) {
+  const m = STATE_TOPIC_RE.exec(topic);
+  const value = Number.parseInt(payload.toString(), 10);
+  if (!m || !Number.isFinite(value)) return;
+  const [, room, kind, id] = m;
+  const key = `room${room}/${kind}${id}`;
+  const device = devices.get(key) || { room: Number(room), kind, id: Number(id), pendingSince: 0 };
+  if (device.pendingSince) {
+    // Web -> broker -> M7 -> M4 -> state back to the web (NFR2 target: <= 500 ms).
+    const ms = Math.round(performance.now() - device.pendingSince);
+    $("latency").textContent = `Last command confirmed in ${ms} ms.`;
+    device.pendingSince = 0;
+  }
+  device.value = value;
+  devices.set(key, device);
+  renderRooms();
+}
+
 function onStatusMessage(payload) {
   try {
     const parsed = JSON.parse(payload.toString());
@@ -92,11 +183,13 @@ function onStatusMessage(payload) {
     return;
   }
   renderStatus();
+  renderRooms(); // switches follow the board's online state
 }
 
 function showDashboard(visible) {
   $("login").hidden = visible;
   $("dashboard").hidden = !visible;
+  $("rooms").hidden = !visible;
 }
 
 function connect(url, username, password) {
@@ -119,13 +212,14 @@ function connect(url, username, password) {
     button.disabled = false;
     setConn("Connected", "on");
     showDashboard(true);
-    client.subscribe(STATUS_TOPIC, { qos: 1 }, (err) => {
+    client.subscribe([STATUS_TOPIC, STATE_FILTER], { qos: 1 }, (err) => {
       if (err) console.error("Subscribe failed:", err);
     });
   });
 
   client.on("message", (topic, payload) => {
     if (topic === STATUS_TOPIC) onStatusMessage(payload);
+    else onStateMessage(topic, payload);
   });
 
   client.on("reconnect", () => setConn("Reconnecting…", "off"));
@@ -159,7 +253,10 @@ function disconnect() {
     old.end(true);
   }
   lastStatus = null;
+  devices.clear();
+  $("latency").textContent = "";
   renderStatus();
+  renderRooms();
   showDashboard(false);
   setConn("Disconnected", "off");
   $("login-form").querySelector("button").disabled = false;
@@ -184,6 +281,19 @@ function init() {
 
   setInterval(() => {
     if (lastStatus && lastStatus.online === true) renderStatus();
+
+    // A command without confirmation is shown as failed instead of pending forever.
+    let expired = false;
+    for (const d of devices.values()) {
+      if (d.pendingSince && performance.now() - d.pendingSince > COMMAND_TIMEOUT_MS) {
+        d.pendingSince = 0;
+        expired = true;
+      }
+    }
+    if (expired) {
+      $("latency").textContent = "No confirmation from the board: the command may not have been executed.";
+      renderRooms();
+    }
   }, 1000);
 }
 

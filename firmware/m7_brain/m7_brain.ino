@@ -9,6 +9,8 @@
 
 void setup() {
   Serial.begin(SERIAL_BAUD);  // no while (!Serial): the board must run without USB
+  state::begin();             // subscribe to the bus before anything can publish
+  mqttbridge::begin();
   m4link::begin();            // also boots the M4
   // Returns immediately: WiFi and MQTT connect in their own thread, so the
   // house logic below runs even when the network is down (NFR3).
@@ -20,7 +22,13 @@ void setup() {
 void loop() {
   Event event;
   while (m4link::pollEvent(event)) {
-    // TODO (phase 1): publish on the event bus.
+    BusMessage message{};
+    message.kind = BusKind::SENSOR_EVENT;
+    message.event = event;
+    message.createdMs = millis();
+    bus::publish(message);
   }
+  bus::dispatch(BUS_QUEUE_SIZE);
+  mqttbridge::loop();
   m4link::forwardM4Log(Serial);
 }
