@@ -4,6 +4,8 @@
 
 The course is graded on edge computing: the key properties to preserve and measure are **low latency, offline operation, and minimal network traffic** (only events and state changes are transmitted, never raw sensor streams).
 
+**How the code works:** see [`docs/CODE_GUIDE.md`](docs/CODE_GUIDE.md).
+
 ## Hardware
 
 - Arduino Portenta H7: dual core, Cortex-M7 (480 MHz) + Cortex-M4 (240 MHz)

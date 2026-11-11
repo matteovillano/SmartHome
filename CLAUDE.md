@@ -2,9 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Keep this file up to date
+
+This file is the model's only persistent context between sessions. **Whenever the project moves forward or a change alters something described here** (a phase or slice completed, a new module, device type or library, a changed command, path, pin, contract, workflow or a decision taken by the team), update the relevant section of this file in the same piece of work, together with the README "Current status" checklist. Keep it short and factual: describe the current state, not the history (git has that). Remove statements that are no longer true instead of adding contradictions.
+
 ## Project state
 
-Smart Home Brain: a smart home controller on an **Arduino Portenta H7** (dual core M7 + M4), graded on edge computing (low latency, offline operation, minimal network traffic). At the moment the repo contains only `README.md`, which is the full specification: requirements FR/NFR, acceptance tests T1–T6, team roles and the "Current status" checklist. Read it before starting a task, and update its "Current status" section when a phase advances. The layout described below is the agreed target; create folders following it.
+Smart Home Brain: a smart home controller on an **Arduino Portenta H7** (dual core M7 + M4), graded on edge computing (low latency, offline operation, minimal network traffic). `README.md` is the full specification: requirements FR/NFR, acceptance tests T1–T6, team roles and the "Current status" checklist. Read it before starting a task, and update its "Current status" section when a phase advances. `docs/CODE_GUIDE.md` explains how the existing code works, end to end. The layout described below is the agreed target; create folders following it.
+
+Done so far: Phase 0 contracts and library layout; M4 ↔ M7 RPC link (round trip ≈ 0.4 ms); Mosquitto broker with auth + ACL; minimal web app (login, board status); `netlink` WiFi + MQTT thread with `home/system/status` and Last Will; first end-to-end slice (light 1 = onboard green LED, web app → MQTT → event bus → state manager → M4, retained state back). Next: real pin assignments in `config.h` (still placeholders), then Phase 1 modules.
 
 ## Build, upload, test
 
